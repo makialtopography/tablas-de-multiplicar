@@ -127,10 +127,10 @@
     font-size:clamp(20px,6vw,26px); margin:4px 0 14px 0; font-weight:700; color:var(--neon);
   }
   .classified{
-    font-family:'Share Tech Mono',monospace; font-size:13px; line-height:1.7;
-    color:var(--neon); opacity:0; max-height:0; overflow:hidden; transition:opacity .3s;
+    font-family:'Share Tech Mono',monospace; font-size:39px; line-height:1.25;
+    color:var(--neon); opacity:0; max-height:0; overflow-y:auto; transition:opacity .3s;
   }
-  .classified.show{ opacity:1; max-height:300px; }
+  .classified.show{ opacity:1; max-height:50vh; }
   .classified.destroyed{ animation:destroy .5s forwards; }
   @keyframes destroy{
     0%{ opacity:1; filter:none; }
@@ -500,18 +500,13 @@
     }, 500);
 
     setTimeout(function(){
-      status.textContent = "MEMORIZANDO DATOS CLASIFICADOS...";
+      status.textContent = "ARCHIVO DESPLEGADO. MEMORIZA LOS DATOS.";
     }, 1900);
-
-    setTimeout(function(){
-      status.textContent = "ARCHIVO AUTODESTRUYÉNDOSE...";
-      classified.classList.add("destroyed");
-    }, 3000);
 
     setTimeout(function(){
       status.textContent = "LISTO PARA EL DESPLIEGUE.";
       accept.classList.add("show");
-    }, 3600);
+    }, 2600);
   }
 
   $("accept-btn").addEventListener("click", function(){
