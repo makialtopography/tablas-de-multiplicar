@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AGENTE MATEMÁTICO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0A0F;
+    --bg2:#0F1410;
+    --neon:#00FF88;
+    --neon-dim:#00b863;
+    --alert:#FF3B30;
+    --alert2:#FF8A00;
+    --gold:#FFB300;
+    --panel:#101418;
+    --panel-edge:#1c2b22;
+    --text-dim:#7fa896;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    background:var(--bg); overflow:hidden; touch-action:manipulation;
+  }
+  body{
+    font-family:'Rajdhani',sans-serif; color:var(--neon);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .num{ font-family:'Share Tech Mono', monospace; }
+  .title-font{ font-family:'Orbitron', sans-serif; }
+
+  /* scanlines overlay */
+  #scanlines{
+    position:fixed; inset:0; pointer-events:none; z-index:50;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(0,255,136,0.025) 0px,
+      rgba(0,255,136,0.025) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode:screen;
+  }
+  #vignette{
+    position:fixed; inset:0; pointer-events:none; z-index:49;
+    background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
+  }
+
+  #app{
+    position:relative; width:100vw; height:100vh; max-width:560px; max-height:900px;
+    margin:auto; background:var(--bg);
+    border-left:1px solid var(--panel-edge); border-right:1px solid var(--panel-edge);
+    overflow:hidden;
+  }
+
+  .screen{
+    position:absolute; inset:0; display:none;
+    flex-direction:column; padding:18px;
+    animation:fadeIn .35s ease;
+  }
+  .screen.active{ display:flex; }
+
+  @keyframes fadeIn{ from{opacity:0; transform:scale(.98);} to{opacity:1; transform:scale(1);} }
+
+  .glow-border{
+    border:1px solid var(--neon-dim);
+    box-shadow:0 0 8px rgba(0,255,136,0.25), inset 0 0 12px rgba(0,255,136,0.05);
+    border-radius:10px;
+  }
+
+  /* ---------- HQ ---------- */
+  #hq-screen{ justify-content:flex-start; }
+  .hq-header{
+    text-align:center; padding:6px 0 14px 0; flex:0 0 auto;
+  }
+  .hq-header h1{
+    font-size:clamp(22px,7vw,30px); margin:0; letter-spacing:3px;
+    text-shadow:0 0 10px var(--neon), 0 0 24px rgba(0,255,136,0.5);
+  }
+  .hq-header .sub{
+    color:var(--text-dim); font-size:12px; letter-spacing:4px; margin-top:4px;
+  }
+
+  .table-grid{
+    display:grid; grid-template-columns:repeat(2,1fr); gap:10px;
+    flex:1 1 auto; min-height:0;
+  }
+  .table-tile{
+    position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:linear-gradient(160deg,#0d1410,#0a0e0b); cursor:pointer;
+    padding:6px 4px; min-height:0;
+    transition:transform .12s ease;
+  }
+  .table-tile:active{ transform:scale(.96); }
+  .table-tile.locked{ filter:grayscale(1) brightness(.5); cursor:not-allowed; }
+  .table-tile .t-num{ font-size:clamp(26px,7vw,34px); font-weight:700; }
+  .table-tile .t-label{ font-size:10px; letter-spacing:2px; color:var(--text-dim); }
+  .table-tile .t-stars{ font-size:14px; margin-top:2px; letter-spacing:2px; color:var(--gold); }
+  .table-tile .t-time{ font-size:10px; color:var(--text-dim); margin-top:2px; font-family:'Share Tech Mono',monospace; }
+  .table-tile .t-lock{ font-size:22px; }
+
+  .expert-tile{
+    margin-top:10px; flex:0 0 auto;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    padding:12px; cursor:pointer; background:linear-gradient(100deg,#1a1206,#0d0a04);
+    border-color:var(--gold); box-shadow:0 0 10px rgba(255,179,0,0.3);
+  }
+  .expert-tile.locked{ filter:grayscale(1) brightness(.45); cursor:not-allowed; box-shadow:none; border-color:var(--panel-edge); }
+  .expert-tile .e-title{ font-size:16px; font-weight:700; color:var(--gold); letter-spacing:2px; }
+  .expert-tile .e-sub{ font-size:10px; color:var(--text-dim); }
+
+  .reset-btn{
+    margin-top:10px; flex:0 0 auto; text-align:center; font-size:10px;
+    color:#3a4a42; letter-spacing:1px; cursor:pointer; padding:6px;
+  }
+
+  /* ---------- BRIEFING ---------- */
+  #briefing-screen{ align-items:center; justify-content:center; text-align:center; }
+  .scan-box{
+    width:92%; max-width:380px; padding:20px; position:relative; overflow:hidden;
+  }
+  .scan-box h2{ margin:0 0 4px 0; font-size:13px; letter-spacing:3px; color:var(--text-dim); }
+  .scan-box .mission-name{
+    font-size:clamp(20px,6vw,26px); margin:4px 0 14px 0; font-weight:700; color:var(--neon);
+  }
+  .classified{
+    font-family:'Share Tech Mono',monospace; font-size:13px; line-height:1.7;
+    color:var(--neon); opacity:0; max-height:0; overflow:hidden; transition:opacity .3s;
+  }
+  .classified.show{ opacity:1; max-height:300px; }
+  .classified.destroyed{ animation:destroy .5s forwards; }
+  @keyframes destroy{
+    0%{ opacity:1; filter:none; }
+    60%{ opacity:.6; filter:blur(2px) brightness(3); }
+    100%{ opacity:0; filter:blur(8px) brightness(0); max-height:0; }
+  }
+  .scan-line{
+    position:absolute; left:0; right:0; height:3px;
+    background:linear-gradient(90deg, transparent, var(--neon), transparent);
+    box-shadow:0 0 16px 4px var(--neon);
+    top:0; opacity:0;
+  }
+  .scan-line.active{ animation:scanmove 1.4s ease-in-out; }
+  @keyframes scanmove{
+    0%{ top:0%; opacity:1; }
+    50%{ opacity:1; }
+    100%{ top:100%; opacity:0; }
+  }
+  .scan-status{ font-size:11px; color:var(--text-dim); letter-spacing:2px; margin-top:14px; min-height:16px; }
+
+  .accept-btn{
+    margin-top:22px; padding:16px 38px; font-size:16px; font-weight:700; letter-spacing:3px;
+    background:var(--neon); color:#04150c; border:none; border-radius:8px; cursor:pointer;
+    box-shadow:0 0 20px rgba(0,255,136,0.6);
+    opacity:0; transform:translateY(10px); pointer-events:none;
+    transition:opacity .4s, transform .4s;
+  }
+  .accept-btn.show{ opacity:1; transform:translateY(0); pointer-events:auto; }
+  .accept-btn:active{ transform:scale(.95); }
+
+  .back-link{ margin-top:16px; font-size:11px; color:var(--text-dim); cursor:pointer; letter-spacing:1px; }
+
+  /* ---------- MISSION ---------- */
+  #mission-screen{ padding:14px; }
+  .mission-top{
+    display:flex; justify-content:space-between; align-items:center; flex:0 0 auto;
+  }
+  .lives{ font-size:18px; letter-spacing:4px; }
+  .score-tag{ font-family:'Share Tech Mono',monospace; font-size:16px; color:var(--gold); }
+  .q-progress{ font-size:11px; color:var(--text-dim); letter-spacing:1px; }
+
+  .timer-track{
+    width:100%; height:8px; border-radius:6px; background:#10180f; margin:10px 0 4px 0;
+    overflow:hidden; flex:0 0 auto; border:1px solid var(--panel-edge);
+  }
+  .timer-fill{
+    height:100%; width:100%; background:var(--neon); transition:width .1s linear, background .3s;
+    box-shadow:0 0 8px var(--neon);
+  }
+  .timer-fill.warn{ background:var(--alert2); box-shadow:0 0 8px var(--alert2); }
+  .timer-fill.danger{ background:var(--alert); box-shadow:0 0 8px var(--alert); }
+
+  .question-zone{
+    flex:1 1 auto; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    position:relative; min-height:0;
+  }
+  .question{
+    font-family:'Share Tech Mono',monospace; font-size:clamp(40px,12vw,62px); font-weight:700;
+    text-shadow:0 0 14px rgba(0,255,136,0.6);
+  }
+  .answer-display{
+    font-family:'Share Tech Mono',monospace; font-size:clamp(28px,9vw,40px); height:56px;
+    margin-top:8px; min-width:120px; text-align:center; letter-spacing:2px;
+    border-bottom:2px solid var(--neon-dim); padding:0 14px;
+  }
+  .answer-display.empty{ color:var(--text-dim); }
+
+  .flash-overlay{
+    position:absolute; inset:-20px; pointer-events:none; opacity:0; border-radius:14px;
+  }
+  .flash-overlay.correct{ animation:flashGreen .45s ease; }
+  .flash-overlay.wrong{ animation:flashRed .45s ease; }
+  @keyframes flashGreen{
+    0%{ opacity:0; background:rgba(0,255,136,0.45); }
+    100%{ opacity:0; background:rgba(0,255,136,0); }
+  }
+  @keyframes flashRed{
+    0%{ opacity:0; background:rgba(255,59,48,0.5); }
+    100%{ opacity:0; background:rgba(255,59,48,0); }
+  }
+  .shake{ animation:shakeAnim .4s; }
+  @keyframes shakeAnim{
+    0%,100%{ transform:translateX(0); }
+    20%{ transform:translateX(-10px); }
+    40%{ transform:translateX(9px); }
+    60%{ transform:translateX(-6px); }
+    80%{ transform:translateX(5px); }
+  }
+
+  .feedback-msg{
+    position:absolute; bottom:-2px; font-size:13px; letter-spacing:2px; font-weight:700;
+    opacity:0; transition:opacity .2s;
+  }
+  .feedback-msg.show{ opacity:1; }
+  .feedback-msg.correct-msg{ color:var(--neon); }
+  .feedback-msg.wrong-msg{ color:var(--alert); }
+
+  .points-popup{
+    position:absolute; top:10%; font-family:'Share Tech Mono',monospace; font-size:20px;
+    color:var(--gold); opacity:0; pointer-events:none;
+  }
+  .points-popup.animate{ animation:pointsUp .8s ease forwards; }
+  @keyframes pointsUp{
+    0%{ opacity:0; transform:translateY(0); }
+    20%{ opacity:1; }
+    100%{ opacity:0; transform:translateY(-40px); }
+  }
+
+  .keypad{
+    flex:0 0 auto; display:grid; grid-template-columns:repeat(3,1fr); gap:8px;
+    margin-top:10px;
+  }
+  .key{
+    font-family:'Share Tech Mono',monospace; font-size:22px; padding:14px 0;
+    background:var(--panel); border:1px solid var(--panel-edge); border-radius:8px;
+    color:var(--neon); cursor:pointer; text-align:center;
+  }
+  .key:active{ background:var(--neon-dim); color:#04150c; }
+  .key.del{ color:var(--alert2); border-color:#3a2410; }
+  .key.ok{ background:var(--neon); color:#04150c; font-weight:700; letter-spacing:2px; }
+  .key.ok:active{ background:#00cc6e; }
+
+  /* ---------- RESULT ---------- */
+  #result-screen{ align-items:center; justify-content:center; text-align:center; }
+  .result-box{ width:92%; max-width:380px; padding:26px 18px; }
+  .result-box h2{ font-size:clamp(20px,6vw,26px); margin:0 0 10px 0; letter-spacing:2px; }
+  .result-box h2.fail{ color:var(--alert); }
+  .stars-row{ font-size:46px; letter-spacing:8px; margin:10px 0; }
+  .star{ color:#2a2a2a; transition:color .3s, transform .3s; display:inline-block; }
+  .star.filled{ color:var(--gold); text-shadow:0 0 14px var(--gold); }
+  .star.pop{ animation:starPop .5s ease; }
+  @keyframes starPop{ 0%{ transform:scale(0); } 60%{ transform:scale(1.3); } 100%{ transform:scale(1); } }
+
+  .result-stats{ font-family:'Share Tech Mono',monospace; font-size:14px; color:var(--text-dim); line-height:1.9; margin:10px 0 4px 0; }
+  .result-stats b{ color:var(--neon); }
+  .record-tag{
+    margin-top:6px; color:var(--gold); font-size:13px; letter-spacing:2px; font-weight:700;
+    opacity:0;
+  }
+  .record-tag.show{ opacity:1; animation:recordPulse 1s infinite; }
+  @keyframes recordPulse{ 0%,100%{ text-shadow:0 0 6px var(--gold);} 50%{ text-shadow:0 0 20px var(--gold);} }
+
+  .result-buttons{ display:flex; gap:10px; margin-top:20px; }
+  .result-buttons button{
+    flex:1; padding:14px 6px; font-size:13px; font-weight:700; letter-spacing:1px;
+    border-radius:8px; cursor:pointer; font-family:'Rajdhani',sans-serif;
+  }
+  .btn-repeat{ background:var(--panel); border:1px solid var(--neon-dim); color:var(--neon); }
+  .btn-home{ background:var(--neon); border:none; color:#04150c; }
+
+  .corner-tag{ position:absolute; top:8px; right:14px; font-size:10px; color:#2a3a32; letter-spacing:1px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+
+  <!-- PANTALLA 1: CUARTEL GENERAL -->
+  <div id="hq-screen" class="screen active">
+    <div class="hq-header">
+      <h1 class="title-font">AGENTE MATEMÁTICO</h1>
+      <div class="sub">CUARTEL GENERAL // ELIGE TU MISIÓN</div>
+    </div>
+    <div class="table-grid glow-border" id="table-grid" style="padding:10px;"></div>
+    <div class="expert-tile glow-border" id="expert-tile">
+      <div class="e-icon" style="font-size:26px;">🕶️</div>
+      <div>
+        <div class="e-title title-font">MODO EXPERTO</div>
+        <div class="e-sub" id="expert-sub">BLOQUEADO</div>
+      </div>
+    </div>
+    <div class="reset-btn" id="reset-btn">resetear progreso</div>
+  </div>
+
+  <!-- PANTALLA 2: BRIEFING -->
+  <div id="briefing-screen" class="screen">
+    <div class="scan-box glow-border">
+      <div class="scan-line" id="scan-line"></div>
+      <h2>EXPEDIENTE CLASIFICADO</h2>
+      <div class="mission-name title-font" id="briefing-title">MISIÓN —</div>
+      <div class="classified" id="classified-content"></div>
+      <div class="scan-status" id="scan-status">INICIANDO ESCANEO DE RETINA...</div>
+      <button class="accept-btn title-font" id="accept-btn">ACEPTAR MISIÓN</button>
+    </div>
+    <div class="back-link" id="briefing-back">← VOLVER AL CUARTEL</div>
+  </div>
+
+  <!-- PANTALLA 3: MISIÓN -->
+  <div id="mission-screen" class="screen">
+    <div class="mission-top">
+      <div class="lives" id="lives-display">🔋🔋🔋</div>
+      <div class="q-progress" id="q-progress">1/10</div>
+      <div class="score-tag" id="score-display">0 PTS</div>
+    </div>
+    <div class="timer-track"><div class="timer-fill" id="timer-fill"></div></div>
+    <div class="question-zone" id="question-zone">
+      <div class="flash-overlay" id="flash-overlay"></div>
+      <div class="points-popup" id="points-popup">+100</div>
+      <div class="question num" id="question-text">7 × 8 = ?</div>
+      <div class="answer-display empty num" id="answer-display">_</div>
+      <div class="feedback-msg" id="feedback-msg"></div>
+    </div>
+    <div class="keypad" id="keypad">
+      <div class="key" data-k="1">1</div><div class="key" data-k="2">2</div><div class="key" data-k="3">3</div>
+      <div class="key" data-k="4">4</div><div class="key" data-k="5">5</div><div class="key" data-k="6">6</div>
+      <div class="key" data-k="7">7</div><div class="key" data-k="8">8</div><div class="key" data-k="9">9</div>
+      <div class="key del" data-k="del">⌫</div><div class="key" data-k="0">0</div><div class="key ok" data-k="ok">OK</div>
+    </div>
+  </div>
+
+  <!-- PANTALLA 4: RESULTADO -->
+  <div id="result-screen" class="screen">
+    <div class="result-box glow-border">
+      <h2 class="title-font" id="result-title">MISIÓN CUMPLIDA</h2>
+      <div class="stars-row" id="stars-row">
+        <span class="star" id="star1">★</span><span class="star" id="star2">★</span><span class="star" id="star3">★</span>
+      </div>
+      <div class="result-stats">
+        PUNTOS: <b id="result-score">0</b><br>
+        TIEMPO: <b id="result-time">0.0s</b><br>
+        ERRORES: <b id="result-errors">0</b>
+      </div>
+      <div class="record-tag" id="record-tag">⚡ NUEVO RÉCORD ⚡</div>
+      <div class="result-buttons">
+        <button class="btn-repeat" id="btn-repeat">REPETIR MISIÓN</button>
+        <button class="btn-home" id="btn-home">CUARTEL</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- ESTADO / GUARDADO ---------------- */
+  var STORAGE_KEY = "agenteMatematicoState_v1";
+
+  function defaultState(){
+    var tables = {};
+    for(var i=1;i<=10;i++){ tables[i] = { stars:0, bestTime:null, bestScore:0 }; }
+    return { tables: tables, expert: { stars:0, bestTime:null, bestScore:0 } };
+  }
+
+  var state = loadState();
+
+  function loadState(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return defaultState();
+      var parsed = JSON.parse(raw);
+      var def = defaultState();
+      for(var k in def.tables){ if(!parsed.tables || !parsed.tables[k]) { parsed.tables = parsed.tables || {}; parsed.tables[k] = def.tables[k]; } }
+      if(!parsed.expert) parsed.expert = def.expert;
+      return parsed;
+    }catch(e){ return defaultState(); }
+  }
+
+  function saveState(){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+  }
+
+  /* ---------------- UTILIDADES ---------------- */
+  function $(id){ return document.getElementById(id); }
+  function shuffle(arr){
+    for(var i=arr.length-1;i>0;i--){
+      var j = Math.floor(Math.random()*(i+1));
+      var t = arr[i]; arr[i]=arr[j]; arr[j]=t;
+    }
+    return arr;
+  }
+  function showScreen(id){
+    var screens = document.querySelectorAll(".screen");
+    for(var i=0;i<screens.length;i++){ screens[i].classList.remove("active"); }
+    $(id).classList.add("active");
+  }
+  function isTableUnlocked(n){
+    if(n === 1) return true;
+    return state.tables[n-1].stars >= 1;
+  }
+  function isExpertUnlocked(){
+    for(var i=1;i<=10;i++){ if(state.tables[i].stars < 2) return false; }
+    return true;
+  }
+  function fmtTime(sec){ return sec.toFixed(1)+"s"; }
+
+  /* ---------------- PANTALLA 1: CUARTEL ---------------- */
+  function renderHQ(){
+    var grid = $("table-grid");
+    grid.innerHTML = "";
+    for(var n=1;n<=10;n++){
+      (function(n){
+        var unlocked = isTableUnlocked(n);
+        var data = state.tables[n];
+        var tile = document.createElement("div");
+        tile.className = "table-tile glow-border" + (unlocked ? "" : " locked");
+        if(!unlocked){
+          tile.innerHTML = '<div class="t-lock">🔒</div><div class="t-label">TABLA '+n+'</div>';
+        } else {
+          var starsTxt = data.stars > 0 ? "★".repeat(data.stars) + "☆".repeat(3-data.stars) : "DISPONIBLE";
+          var timeTxt = data.bestTime ? "MEJOR: "+fmtTime(data.bestTime) : "";
+          tile.innerHTML =
+            '<div class="t-num num">'+n+'</div>'+
+            '<div class="t-label">TABLA DEL '+n+'</div>'+
+            '<div class="t-stars">'+starsTxt+'</div>'+
+            '<div class="t-time">'+timeTxt+'</div>';
+          tile.addEventListener("click", function(){ goToBriefing(n); });
+        }
+        grid.appendChild(tile);
+      })(n);
+    }
+
+    var expertTile = $("expert-tile");
+    var expertSub = $("expert-sub");
+    if(isExpertUnlocked()){
+      expertTile.classList.remove("locked");
+      var ed = state.expert;
+      expertSub.textContent = ed.stars > 0 ? ("★".repeat(ed.stars)+"☆".repeat(3-ed.stars)+(ed.bestTime?"  ·  "+fmtTime(ed.bestTime):"")) : "DISPONIBLE";
+      expertTile.onclick = function(){ startExpertMission(); };
+    } else {
+      expertTile.classList.add("locked");
+      expertSub.textContent = "BLOQUEADO — 2★ EN TODAS LAS TABLAS";
+      expertTile.onclick = null;
+    }
+    showScreen("hq-screen");
+  }
+
+  $("reset-btn").addEventListener("click", function(){
+    if(confirm("¿Resetear todo el progreso del Agente?")){
+      state = defaultState();
+      saveState();
+      renderHQ();
+    }
+  });
+
+  /* ---------------- PANTALLA 2: BRIEFING ---------------- */
+  var pendingMission = null; // {type:'table'|'expert', table:n}
+
+  function goToBriefing(n){
+    pendingMission = { type:"table", table:n };
+    $("briefing-title").textContent = "MISIÓN — TABLA DEL " + n;
+    var lines = [];
+    for(var i=1;i<=10;i++){ lines.push(n+" × "+i+" = "+(n*i)); }
+    $("classified-content").innerHTML = lines.join("<br>");
+    $("classified-content").className = "classified";
+    $("accept-btn").className = "accept-btn title-font";
+    $("scan-line").className = "scan-line";
+    showScreen("briefing-screen");
+    runRetinaScan();
+  }
+
+  function runRetinaScan(){
+    var status = $("scan-status");
+    var classified = $("classified-content");
+    var scanLine = $("scan-line");
+    var accept = $("accept-btn");
+    status.textContent = "INICIANDO ESCANEO DE RETINA...";
+    classified.classList.remove("show","destroyed");
+    accept.classList.remove("show");
+    void classified.offsetWidth;
+
+    setTimeout(function(){
+      status.textContent = "ACCESO CONCEDIDO. CARGANDO ARCHIVO...";
+      classified.classList.add("show");
+      scanLine.classList.add("active");
+    }, 500);
+
+    setTimeout(function(){
+      status.textContent = "MEMORIZANDO DATOS CLASIFICADOS...";
+    }, 1900);
+
+    setTimeout(function(){
+      status.textContent = "ARCHIVO AUTODESTRUYÉNDOSE...";
+      classified.classList.add("destroyed");
+    }, 3000);
+
+    setTimeout(function(){
+      status.textContent = "LISTO PARA EL DESPLIEGUE.";
+      accept.classList.add("show");
+    }, 3600);
+  }
+
+  $("accept-btn").addEventListener("click", function(){
+    if(pendingMission) startTableMission(pendingMission.table);
+  });
+  $("briefing-back").addEventListener("click", function(){ renderHQ(); });
+
+  /* ---------------- PANTALLA 3: MISIÓN ---------------- */
+  var mission = null;
+  var timerInterval = null;
+
+  function buildTableQuestions(n){
+    var mults = shuffle([1,2,3,4,5,6,7,8,9,10]);
+    return mults.map(function(m){ return { a:n, b:m, answer:n*m }; });
+  }
+  function buildExpertQuestions(){
+    var qs = [];
+    for(var i=0;i<10;i++){
+      var a = Math.floor(Math.random()*10)+1;
+      var b = Math.floor(Math.random()*10)+1;
+      qs.push({ a:a, b:b, answer:a*b });
+    }
+    return qs;
+  }
+
+  function startTableMission(n){
+    mission = {
+      kind:"table", table:n, timeLimit:15,
+      questions: buildTableQuestions(n),
+      qIndex:0, lives:3, score:0, errors:0,
+      startedAt: Date.now(), input:""
+    };
+    showScreen("mission-screen");
+    renderQuestion();
+  }
+  function startExpertMission(){
+    mission = {
+      kind:"expert", timeLimit:10,
+      questions: buildExpertQuestions(),
+      qIndex:0, lives:3, score:0, errors:0,
+      startedAt: Date.now(), input:""
+    };
+    showScreen("mission-screen");
+    renderQuestion();
+  }
+
+  function updateHUD(){
+    $("lives-display").textContent = "🔋".repeat(mission.lives) + "·".repeat(3-mission.lives);
+    $("q-progress").textContent = (mission.qIndex+1)+"/10";
+    $("score-display").textContent = mission.score + " PTS";
+  }
+
+  function renderQuestion(){
+    var q = mission.questions[mission.qIndex];
+    mission.input = "";
+    $("question-text").textContent = q.a + " × " + q.b + " = ?";
+    $("answer-display").textContent = "_";
+    $("answer-display").classList.add("empty");
+    $("feedback-msg").className = "feedback-msg";
+    $("feedback-msg").textContent = "";
+    updateHUD();
+    startTimer();
+  }
+
+  function startTimer(){
+    clearInterval(timerInterval);
+    var limit = mission.timeLimit;
+    var elapsed = 0;
+    var fill = $("timer-fill");
+    fill.style.width = "100%";
+    fill.className = "timer-fill";
+    mission.qStart = Date.now();
+    timerInterval = setInterval(function(){
+      elapsed = (Date.now() - mission.qStart) / 1000;
+      var ratio = Math.max(0, 1 - elapsed/limit);
+      fill.style.width = (ratio*100) + "%";
+      if(ratio < 0.3) fill.className = "timer-fill danger";
+      else if(ratio < 0.6) fill.className = "timer-fill warn";
+      else fill.className = "timer-fill";
+      if(elapsed >= limit){
+        clearInterval(timerInterval);
+        handleAnswer(null, true);
+      }
+    }, 60);
+  }
+
+  function updateAnswerDisplay(){
+    if(mission.input.length === 0){
+      $("answer-display").textContent = "_";
+      $("answer-display").classList.add("empty");
+    } else {
+      $("answer-display").textContent = mission.input;
+      $("answer-display").classList.remove("empty");
+    }
+  }
+
+  $("keypad").addEventListener("click", function(e){
+    var key = e.target.getAttribute("data-k");
+    if(!key) return;
+    handleKey(key);
+  });
+
+  document.addEventListener("keydown", function(e){
+    if(!$("mission-screen").classList.contains("active")) return;
+    if(e.key >= "0" && e.key <= "9"){ handleKey(e.key); }
+    else if(e.key === "Backspace"){ handleKey("del"); }
+    else if(e.key === "Enter"){ handleKey("ok"); }
+  });
+
+  function handleKey(key){
+    if(!mission || mission.locked) return;
+    if(key === "del"){
+      mission.input = mission.input.slice(0,-1);
+      updateAnswerDisplay();
+    } else if(key === "ok"){
+      if(mission.input.length === 0) return;
+      handleAnswer(parseInt(mission.input,10), false);
+    } else {
+      if(mission.input.length >= 3) return;
+      mission.input += key;
+      updateAnswerDisplay();
+    }
+  }
+
+  function handleAnswer(value, timedOut){
+    clearInterval(timerInterval);
+    mission.locked = true;
+    var q = mission.questions[mission.qIndex];
+    var correct = (!timedOut) && (value === q.answer);
+    var flash = $("flash-overlay");
+    var fb = $("feedback-msg");
+    var zone = $("question-zone");
+
+    if(correct){
+      var elapsed = (Date.now() - mission.qStart)/1000;
+      var bonus = Math.round(Math.max(0, (1 - elapsed/mission.timeLimit)) * 50);
+      var points = 100 + bonus;
+      mission.score += points;
+      flash.className = "flash-overlay correct";
+      fb.textContent = "¡OBJETIVO DESACTIVADO!";
+      fb.className = "feedback-msg show correct-msg";
+      var popup = $("points-popup");
+      popup.textContent = "+"+points;
+      popup.className = "points-popup animate";
+    } else {
+      mission.lives -= 1;
+      mission.errors += 1;
+      flash.className = "flash-overlay wrong";
+      fb.textContent = "FALLO — ERA " + q.answer;
+      fb.className = "feedback-msg show wrong-msg";
+      zone.classList.add("shake");
+      setTimeout(function(){ zone.classList.remove("shake"); }, 420);
+    }
+    updateHUD();
+
+    setTimeout(function(){
+      flash.className = "flash-overlay";
+      mission.locked = false;
+      if(mission.lives <= 0){
+        finishMission(false);
+        return;
+      }
+      mission.qIndex += 1;
+      if(mission.qIndex >= mission.questions.length){
+        finishMission(true);
+        return;
+      }
+      renderQuestion();
+    }, 1100);
+  }
+
+  /* ---------------- PANTALLA 4: RESULTADO ---------------- */
+  function finishMission(success){
+    var totalTime = (Date.now() - mission.startedAt)/1000;
+    var resultTitle = $("result-title");
+    var record = $("record-tag");
+    record.classList.remove("show");
+
+    if(!success){
+      resultTitle.textContent = "MISIÓN FALLIDA";
+      resultTitle.className = "title-font fail";
+      setStars(0);
+      $("result-score").textContent = mission.score;
+      $("result-time").textContent = fmtTime(totalTime);
+      $("result-errors").textContent = mission.errors;
+      showScreen("result-screen");
+      return;
+    }
+
+    resultTitle.textContent = "MISIÓN CUMPLIDA";
+    resultTitle.className = "title-font";
+
+    var stars = 1;
+    if(mission.errors === 0 && totalTime < 90) stars = 3;
+    else if(mission.errors < 2) stars = 2;
+    setStars(stars);
+
+    $("result-score").textContent = mission.score;
+    $("result-time").textContent = fmtTime(totalTime);
+    $("result-errors").textContent = mission.errors;
+
+    var key = mission.kind === "table" ? mission.table : "expert";
+    var record_ = mission.kind === "table" ? state.tables[key] : state.expert;
+    var isRecord = false;
+    if(stars > record_.stars) { record_.stars = stars; isRecord = true; }
+    if(record_.bestTime === null || totalTime < record_.bestTime){ record_.bestTime = totalTime; isRecord = true; }
+    if(mission.score > record_.bestScore){ record_.bestScore = mission.score; isRecord = true; }
+    saveState();
+
+    if(isRecord){ record.classList.add("show"); }
+    showScreen("result-screen");
+  }
+
+  function setStars(n){
+    for(var i=1;i<=3;i++){
+      var s = $("star"+i);
+      s.className = "star";
+    }
+    for(var i=1;i<=n;i++){
+      (function(i){
+        setTimeout(function(){
+          var s = $("star"+i);
+          s.className = "star filled pop";
+        }, i*220);
+      })(i);
+    }
+  }
+
+  $("btn-repeat").addEventListener("click", function(){
+    if(mission.kind === "table") startTableMission(mission.table);
+    else startExpertMission();
+  });
+  $("btn-home").addEventListener("click", function(){ renderHQ(); });
+
+  /* ---------------- INICIO ---------------- */
+  renderHQ();
+})();
+</script>
+</body>
+</html>
