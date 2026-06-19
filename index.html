@@ -552,7 +552,15 @@
 
   function buildTableQuestions(n){
     var mults = shuffle([1,2,3,4,5,6,7,8,9,10]);
-    return mults.map(function(m){ return { a:n, b:m, answer:n*m }; });
+    return mults.map(function(m){ 
+      // El "Factor Caos": 50% de probabilidad de invertir los números
+      var invertir = Math.random() > 0.5; 
+      return { 
+        a: invertir ? m : n, 
+        b: invertir ? n : m, 
+        answer: n*m 
+      }; 
+    });
   }
   function buildExpertQuestions(){
     var qs = [];
@@ -567,18 +575,10 @@
   function startTableMission(n, mode){
     var isHack = (mode === "hack");
     var allQuestions = buildTableQuestions(n);
-    var targetQuestions = isHack ? allQuestions.slice(0, 4) : allQuestions; // Ahora son 4 pruebas
-
-    if(isHack){
-      // Invertir aleatoriamente el orden de los factores para retar la agilidad mental
-      targetQuestions.forEach(function(q){
-        if(Math.random() > 0.5){
-          var temp = q.a;
-          q.a = q.b;
-          q.b = temp;
-        }
-      });
-    }
+    
+    // Si es hackeo, toma solo 4 preguntas. Si es misión normal, toma las 10.
+    // Como buildTableQuestions ya mezcla e invierte, ambos modos tienen el "Factor Caos".
+    var targetQuestions = isHack ? allQuestions.slice(0, 4) : allQuestions;
 
     mission = {
       kind: "table", table: n, mode: mode,
