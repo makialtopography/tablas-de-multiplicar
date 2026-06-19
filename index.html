@@ -51,7 +51,7 @@
   }
 
   #app{
-    position:relative; width:100vw; height:100vh; max-width:560px; max-height:900px;
+    position:relative; width:100vw; height:100vh; height:100dvh; max-width:560px; max-height:900px;
     margin:auto; background:var(--bg);
     border-left:1px solid var(--panel-edge); border-right:1px solid var(--panel-edge);
     overflow:hidden;
@@ -60,6 +60,7 @@
   .screen{
     position:absolute; inset:0; display:none;
     flex-direction:column; padding:18px;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
     animation:fadeIn .35s ease;
   }
   .screen.active{ display:flex; }
@@ -198,7 +199,8 @@
   .timer-fill.hack{ background:var(--purple); box-shadow:0 0 8px var(--purple); }
 
   .question-zone{
-    flex:1 1 auto; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    flex:1 1 auto; display:flex; flex-direction:column; align-items:center;
+    justify-content:flex-end; padding-bottom:4vh;
     position:relative; min-height:0;
   }
   .question{
@@ -266,6 +268,12 @@
   .key.del{ color:var(--alert2); border-color:#3a2410; }
   .key.ok{ background:var(--neon); color:#04150c; font-weight:700; letter-spacing:2px; }
   .key.ok:active{ background:#00cc6e; }
+
+  @media (max-height: 700px) {
+    .question-zone { padding-bottom: 2vh; }
+    .key { padding: 10px 0; font-size: 20px; }
+    .keypad { gap: 6px; margin-top: 5px; }
+  }
 
   /* ---------- RESULT ---------- */
   #result-screen{ align-items:center; justify-content:center; text-align:center; }
@@ -559,7 +567,18 @@
   function startTableMission(n, mode){
     var isHack = (mode === "hack");
     var allQuestions = buildTableQuestions(n);
-    var targetQuestions = isHack ? allQuestions.slice(0, 3) : allQuestions;
+    var targetQuestions = isHack ? allQuestions.slice(0, 4) : allQuestions; // Ahora son 4 pruebas
+
+    if(isHack){
+      // Invertir aleatoriamente el orden de los factores para retar la agilidad mental
+      targetQuestions.forEach(function(q){
+        if(Math.random() > 0.5){
+          var temp = q.a;
+          q.a = q.b;
+          q.b = temp;
+        }
+      });
+    }
 
     mission = {
       kind: "table", table: n, mode: mode,
