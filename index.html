@@ -19,6 +19,7 @@
     --panel:#101418;
     --panel-edge:#1c2b22;
     --text-dim:#7fa896;
+    --purple:#B026FF; /* Color para el modo Hackeo */
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none;}
   html,body{
@@ -151,15 +152,27 @@
   }
   .scan-status{ font-size:11px; color:var(--text-dim); letter-spacing:2px; margin-top:14px; min-height:16px; }
 
-  .accept-btn{
-    margin-top:22px; padding:16px 38px; font-size:16px; font-weight:700; letter-spacing:3px;
-    background:var(--neon); color:#04150c; border:none; border-radius:8px; cursor:pointer;
-    box-shadow:0 0 20px rgba(0,255,136,0.6);
-    opacity:0; transform:translateY(10px); pointer-events:none;
-    transition:opacity .4s, transform .4s;
+  /* Nuevo contenedor de botones duales para el briefing */
+  .briefing-actions {
+    display: flex; gap: 10px; margin-top: 22px;
+    opacity: 0; transform: translateY(10px); pointer-events: none;
+    transition: opacity .4s, transform .4s;
   }
-  .accept-btn.show{ opacity:1; transform:translateY(0); pointer-events:auto; }
-  .accept-btn:active{ transform:scale(.95); }
+  .briefing-actions.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  
+  .accept-btn, .hack-btn {
+    flex: 1; padding: 14px 5px; font-size: 14px; font-weight: 700; letter-spacing: 2px;
+    border: none; border-radius: 8px; cursor: pointer;
+  }
+  .accept-btn {
+    background: var(--neon); color: #04150c;
+    box-shadow: 0 0 15px rgba(0,255,136,0.4);
+  }
+  .hack-btn {
+    background: var(--purple); color: #fff;
+    box-shadow: 0 0 15px rgba(176,38,255,0.4);
+  }
+  .accept-btn:active, .hack-btn:active{ transform:scale(.95); }
 
   .back-link{ margin-top:16px; font-size:11px; color:var(--text-dim); cursor:pointer; letter-spacing:1px; }
 
@@ -182,6 +195,7 @@
   }
   .timer-fill.warn{ background:var(--alert2); box-shadow:0 0 8px var(--alert2); }
   .timer-fill.danger{ background:var(--alert); box-shadow:0 0 8px var(--alert); }
+  .timer-fill.hack{ background:var(--purple); box-shadow:0 0 8px var(--purple); }
 
   .question-zone{
     flex:1 1 auto; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -258,6 +272,7 @@
   .result-box{ width:92%; max-width:380px; padding:26px 18px; }
   .result-box h2{ font-size:clamp(20px,6vw,26px); margin:0 0 10px 0; letter-spacing:2px; }
   .result-box h2.fail{ color:var(--alert); }
+  .result-box h2.hack{ color:var(--purple); text-shadow:0 0 10px rgba(176,38,255,0.5); }
   .stars-row{ font-size:46px; letter-spacing:8px; margin:10px 0; }
   .star{ color:#2a2a2a; transition:color .3s, transform .3s; display:inline-block; }
   .star.filled{ color:var(--gold); text-shadow:0 0 14px var(--gold); }
@@ -314,7 +329,13 @@
       <div class="mission-name title-font" id="briefing-title">MISIÓN —</div>
       <div class="classified" id="classified-content"></div>
       <div class="scan-status" id="scan-status">INICIANDO ESCANEO DE RETINA...</div>
-      <button class="accept-btn title-font" id="accept-btn">ACEPTAR MISIÓN</button>
+      
+      <!-- Opciones duales: Misión normal o Hackeo (Test) -->
+      <div class="briefing-actions" id="briefing-actions">
+        <button class="accept-btn title-font" id="accept-btn">MISIÓN<br><small>(10 PREG)</small></button>
+        <button class="hack-btn title-font" id="hack-btn">HACKEAR<br><small>(TEST RÁPIDO)</small></button>
+      </div>
+
     </div>
     <div class="back-link" id="briefing-back">← VOLVER AL CUARTEL</div>
   </div>
@@ -477,7 +498,7 @@
     for(var i=1;i<=10;i++){ lines.push(n+" × "+i+" = "+(n*i)); }
     $("classified-content").innerHTML = lines.join("<br>");
     $("classified-content").className = "classified";
-    $("accept-btn").className = "accept-btn title-font";
+    $("briefing-actions").className = "briefing-actions";
     $("scan-line").className = "scan-line";
     showScreen("briefing-screen");
     runRetinaScan();
@@ -487,10 +508,10 @@
     var status = $("scan-status");
     var classified = $("classified-content");
     var scanLine = $("scan-line");
-    var accept = $("accept-btn");
+    var actions = $("briefing-actions");
     status.textContent = "INICIANDO ESCANEO DE RETINA...";
     classified.classList.remove("show","destroyed");
-    accept.classList.remove("show");
+    actions.classList.remove("show");
     void classified.offsetWidth;
 
     setTimeout(function(){
@@ -505,12 +526,15 @@
 
     setTimeout(function(){
       status.textContent = "LISTO PARA EL DESPLIEGUE.";
-      accept.classList.add("show");
+      actions.classList.add("show");
     }, 2600);
   }
 
   $("accept-btn").addEventListener("click", function(){
-    if(pendingMission) startTableMission(pendingMission.table);
+    if(pendingMission) startTableMission(pendingMission.table, "normal");
+  });
+  $("hack-btn").addEventListener("click", function(){
+    if(pendingMission) startTableMission(pendingMission.table, "hack");
   });
   $("briefing-back").addEventListener("click", function(){ renderHQ(); });
 
@@ -532,30 +556,52 @@
     return qs;
   }
 
-  function startTableMission(n){
+  function startTableMission(n, mode){
+    var isHack = (mode === "hack");
+    var allQuestions = buildTableQuestions(n);
+    var targetQuestions = isHack ? allQuestions.slice(0, 3) : allQuestions;
+
     mission = {
-      kind:"table", table:n, timeLimit:15,
-      questions: buildTableQuestions(n),
-      qIndex:0, lives:3, score:0, errors:0,
-      startedAt: Date.now(), input:""
+      kind: "table", table: n, mode: mode,
+      timeLimit: isHack ? 10 : 15, // Hackeo da menos tiempo
+      questions: targetQuestions,
+      qIndex: 0, 
+      lives: isHack ? 1 : 3, // En modo hackeo un error y mueres
+      score: 0, errors: 0,
+      startedAt: Date.now(), input: ""
     };
+    
+    // Cambiar color de neón en la interfaz si es hackeo
+    if(isHack){
+      document.documentElement.style.setProperty('--neon', 'var(--purple)');
+      document.documentElement.style.setProperty('--neon-dim', '#7a19b5');
+    } else {
+      document.documentElement.style.setProperty('--neon', '#00FF88');
+      document.documentElement.style.setProperty('--neon-dim', '#00b863');
+    }
+
     showScreen("mission-screen");
     renderQuestion();
   }
+
   function startExpertMission(){
+    document.documentElement.style.setProperty('--neon', '#00FF88');
+    document.documentElement.style.setProperty('--neon-dim', '#00b863');
+    
     mission = {
-      kind:"expert", timeLimit:10,
+      kind: "expert", mode: "normal", timeLimit: 10,
       questions: buildExpertQuestions(),
-      qIndex:0, lives:3, score:0, errors:0,
-      startedAt: Date.now(), input:""
+      qIndex: 0, lives: 3, score: 0, errors: 0,
+      startedAt: Date.now(), input: ""
     };
     showScreen("mission-screen");
     renderQuestion();
   }
 
   function updateHUD(){
-    $("lives-display").textContent = "🔋".repeat(mission.lives) + "·".repeat(3-mission.lives);
-    $("q-progress").textContent = (mission.qIndex+1)+"/10";
+    var lifeIcon = mission.mode === "hack" ? "⚡" : "🔋";
+    $("lives-display").textContent = lifeIcon.repeat(mission.lives) + "·".repeat((mission.mode==="hack"?1:3)-mission.lives);
+    $("q-progress").textContent = (mission.qIndex+1) + "/" + mission.questions.length;
     $("score-display").textContent = mission.score + " PTS";
   }
 
@@ -578,14 +624,20 @@
     var fill = $("timer-fill");
     fill.style.width = "100%";
     fill.className = "timer-fill";
+    if(mission.mode === "hack") fill.classList.add("hack");
+
     mission.qStart = Date.now();
     timerInterval = setInterval(function(){
       elapsed = (Date.now() - mission.qStart) / 1000;
       var ratio = Math.max(0, 1 - elapsed/limit);
       fill.style.width = (ratio*100) + "%";
-      if(ratio < 0.3) fill.className = "timer-fill danger";
-      else if(ratio < 0.6) fill.className = "timer-fill warn";
-      else fill.className = "timer-fill";
+      
+      if(mission.mode !== "hack"){
+        if(ratio < 0.3) fill.className = "timer-fill danger";
+        else if(ratio < 0.6) fill.className = "timer-fill warn";
+        else fill.className = "timer-fill";
+      }
+      
       if(elapsed >= limit){
         clearInterval(timerInterval);
         handleAnswer(null, true);
@@ -646,7 +698,7 @@
       var points = 100 + bonus;
       mission.score += points;
       flash.className = "flash-overlay correct";
-      fb.textContent = "¡OBJETIVO DESACTIVADO!";
+      fb.textContent = mission.mode === "hack" ? "¡FIREWALL SUPERADO!" : "¡OBJETIVO DESACTIVADO!";
       fb.className = "feedback-msg show correct-msg";
       var popup = $("points-popup");
       popup.textContent = "+"+points;
@@ -686,7 +738,7 @@
     record.classList.remove("show");
 
     if(!success){
-      resultTitle.textContent = "MISIÓN FALLIDA";
+      resultTitle.textContent = mission.mode === "hack" ? "HACKEO INTERCEPTADO" : "MISIÓN FALLIDA";
       resultTitle.className = "title-font fail";
       setStars(0);
       $("result-score").textContent = mission.score;
@@ -696,12 +748,23 @@
       return;
     }
 
-    resultTitle.textContent = "MISIÓN CUMPLIDA";
-    resultTitle.className = "title-font";
+    if(mission.mode === "hack"){
+      resultTitle.textContent = "SISTEMA VULNERADO";
+      resultTitle.className = "title-font hack";
+    } else {
+      resultTitle.textContent = "MISIÓN CUMPLIDA";
+      resultTitle.className = "title-font";
+    }
 
     var stars = 1;
-    if(mission.errors === 0 && totalTime < 90) stars = 3;
-    else if(mission.errors < 2) stars = 2;
+    if(mission.mode === "hack") {
+      // El hackeo asegura 1 estrella para desbloquear la siguiente (si no tenía ninguna)
+      var currentStars = state.tables[mission.table].stars;
+      stars = Math.max(currentStars, 1); 
+    } else {
+      if(mission.errors === 0 && totalTime < 90) stars = 3;
+      else if(mission.errors < 2) stars = 2;
+    }
     setStars(stars);
 
     $("result-score").textContent = mission.score;
@@ -711,12 +774,17 @@
     var key = mission.kind === "table" ? mission.table : "expert";
     var record_ = mission.kind === "table" ? state.tables[key] : state.expert;
     var isRecord = false;
+    
     if(stars > record_.stars) { record_.stars = stars; isRecord = true; }
-    if(record_.bestTime === null || totalTime < record_.bestTime){ record_.bestTime = totalTime; isRecord = true; }
-    if(mission.score > record_.bestScore){ record_.bestScore = mission.score; isRecord = true; }
+    // Guardar records solo en misión normal para no mezclar tiempos de hackeo (que son de 3 preguntas)
+    if(mission.mode === "normal"){
+      if(record_.bestTime === null || totalTime < record_.bestTime){ record_.bestTime = totalTime; isRecord = true; }
+      if(mission.score > record_.bestScore){ record_.bestScore = mission.score; isRecord = true; }
+    }
+    
     saveState();
 
-    if(isRecord){ record.classList.add("show"); }
+    if(isRecord && mission.mode === "normal"){ record.classList.add("show"); }
     showScreen("result-screen");
   }
 
@@ -736,10 +804,15 @@
   }
 
   $("btn-repeat").addEventListener("click", function(){
-    if(mission.kind === "table") startTableMission(mission.table);
+    if(mission.kind === "table") startTableMission(mission.table, mission.mode);
     else startExpertMission();
   });
-  $("btn-home").addEventListener("click", function(){ renderHQ(); });
+  $("btn-home").addEventListener("click", function(){ 
+    // Restaurar colores de UI global antes de volver a HQ
+    document.documentElement.style.setProperty('--neon', '#00FF88');
+    document.documentElement.style.setProperty('--neon-dim', '#00b863');
+    renderHQ(); 
+  });
 
   /* ---------------- INICIO ---------------- */
   renderHQ();
