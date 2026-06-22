@@ -355,7 +355,7 @@
     <div class="reset-btn" id="reset-btn">resetear progreso</div>
   </div>
 
-  <!-- PANTALLA ENTRENAMIENTO (NUEVA) -->
+  <!-- PANTALLA ENTRENAMIENTO -->
   <div id="training-screen" class="screen">
     <div class="hq-header">
       <h1 class="title-font" style="color:#0088ff; text-shadow:0 0 10px #0088ff;">ENTRENAMIENTO</h1>
@@ -454,12 +454,13 @@
   "use strict";
 
   /* ---------------- ESTADO / GUARDADO ---------------- */
-  var STORAGE_KEY = "agenteMatematicoState_v1";
+  var STORAGE_KEY = "agenteMatematicoState_v3"; // Actualizado key de storage
+  var ONE_HOUR = 60 * 60 * 1000; // 1 Hora en milisegundos
 
   function defaultState(){
     var tables = {};
     for(var i=1;i<=10;i++){ tables[i] = { stars:0, bestTime:null, bestScore:0 }; }
-    return { tables: tables, expert: { stars:0, bestTime:null, bestScore:0 } };
+    return { tables: tables, expert: { stars:0, bestTime:null, bestScore:0 }, lastActive: Date.now() };
   }
 
   var state = loadState();
@@ -469,16 +470,39 @@
       var raw = localStorage.getItem(STORAGE_KEY);
       if(!raw) return defaultState();
       var parsed = JSON.parse(raw);
+      
+      // Controlador de Inactividad (Reset > 1 Hora)
+      if(parsed.lastActive && (Date.now() - parsed.lastActive > ONE_HOUR)) {
+          return defaultState();
+      }
+
       var def = defaultState();
       for(var k in def.tables){ if(!parsed.tables || !parsed.tables[k]) { parsed.tables = parsed.tables || {}; parsed.tables[k] = def.tables[k]; } }
       if(!parsed.expert) parsed.expert = def.expert;
+      
+      parsed.lastActive = Date.now();
       return parsed;
     }catch(e){ return defaultState(); }
   }
 
   function saveState(){
+    state.lastActive = Date.now();
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
   }
+
+  /* --- DETECTAR CUANDO VUELVE A ABRIR LA APP DESDE SEGUNDO PLANO --- */
+  document.addEventListener("visibilitychange", function() {
+    if (!document.hidden) {
+      if (state && state.lastActive && (Date.now() - state.lastActive > ONE_HOUR)) {
+        state = defaultState();
+        saveState();
+        location.reload(); // Recarga limpia tras expirar sesión
+      } else if (state) {
+        state.lastActive = Date.now();
+        saveState();
+      }
+    }
+  });
 
   /* ---------------- UTILIDADES ---------------- */
   function $(id){ return document.getElementById(id); }
@@ -557,7 +581,7 @@
     showScreen("training-screen");
   });
   $("training-back").addEventListener("click", function(){
-    // Pausar iframes al salir (truco de recargar el src)
+    // Pausar iframes al salir recargando src
     document.querySelectorAll('#training-screen iframe').forEach(function(iframe) {
         var src = iframe.src;
         iframe.src = src;
@@ -619,7 +643,7 @@
   var mission = null;
   var timerInterval = null;
 
-  // FACTOR CAOS: 50% probabilidad de invertir
+  // FACTOR CAOS: 50% probabilidad de invertir factores (Ej: 7x2 -> 2x7)
   function buildTableQuestions(n){
     var mults = shuffle([1,2,3,4,5,6,7,8,9,10]);
     return mults.map(function(m){ 
@@ -641,19 +665,20 @@
   function startTableMission(n, mode){
     var isHack = (mode === "hack");
     var allQuestions = buildTableQuestions(n);
-    var targetQuestions = isHack ? allQuestions.slice(0, 4) : allQuestions; // 4 preguntas en Hack
+    var targetQuestions = isHack ? allQuestions.slice(0, 4) : allQuestions; // 4 preguntas en Hackeo
 
     mission = {
       kind: "table", table: n, mode: mode,
-      timeLimit: isHack ? 20 : 15, // 20 Segundos para hackear, 15 para normal
+      timeLimit: isHack ? 20 : 15, // 20 Segundos para Hackeo, 15 Misión
       questions: targetQuestions,
       qIndex: 0, 
       lives: isHack ? 1 : 3, // 1 vida en hackeo
       score: 0, errors: 0,
-      startedAt: Date.now(), input: ""
+      startedAt: Date.now(), input: "",
+      hackSpeedPoints: 0 // NUEVO: Registra la velocidad del hackeo
     };
     
-    // UI Color hacking
+    // UI Hacker
     if(isHack){
       document.documentElement.style.setProperty('--neon', 'var(--purple)');
       document.documentElement.style.setProperty('--neon-dim', '#7a19b5');
@@ -776,6 +801,17 @@
 
     if(correct){
       var elapsed = (Date.now() - mission.qStart)/1000;
+      
+      // NUEVO: Evaluación de velocidad en Modo Hackeo
+      if(mission.mode === "hack"){
+        // Si responde en la primera mitad del tiempo gana 1 punto, si no, 0.5
+        if(elapsed <= (mission.timeLimit / 2)){
+          mission.hackSpeedPoints += 1;
+        } else {
+          mission.hackSpeedPoints += 0.5;
+        }
+      }
+
       var bonus = Math.round(Math.max(0, (1 - elapsed/mission.timeLimit)) * 50);
       var points = 100 + bonus;
       mission.score += points;
@@ -840,8 +876,10 @@
 
     var stars = 1;
     if(mission.mode === "hack") {
+      // CORRECCIÓN: El hackeo otorga 2 o 3 estrellas según la velocidad (Rango Hacker)
+      var earnedStars = mission.hackSpeedPoints >= 3.5 ? 3 : 2;
       var currentStars = state.tables[mission.table].stars;
-      stars = Math.max(currentStars, 1); 
+      stars = Math.max(currentStars, earnedStars); 
     } else {
       if(mission.errors === 0 && totalTime < 90) stars = 3;
       else if(mission.errors < 2) stars = 2;
@@ -898,4 +936,3 @@
 </script>
 </body>
 </html>
-```
